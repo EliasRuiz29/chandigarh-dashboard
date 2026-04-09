@@ -1,0 +1,7 @@
+Variable_pair,Spearman_rho,p_value,n,Significant_p05,Direction_confirmed
+LST–NDVI,-0.816,0.0,63,Yes,Yes
+LST–TCI,0.34,0.0063,63,Yes,Yes
+LST–NDBI,-0.601,0.0,63,Yes,No — reversed
+LST–GHI,-0.316,0.1323,24,No,Yes
+LST–Population,0.12,0.349,63,No,Yes
+LST–SC_pct,0.207,0.1033,63,No,Yes

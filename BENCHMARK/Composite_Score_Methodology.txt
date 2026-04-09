@@ -1,0 +1,268 @@
+
+COMPOSITE VULNERABILITY SCORE METHODOLOGY
+==========================================
+Chandigarh Urban Sectors Vulnerability Ranking
+Date: 2026-04-06 14:14:58
+
+═════════════════════════════════════════════════════════════════════════════════
+
+1. OVERVIEW
+
+The Composite Vulnerability Score quantifies urban vulnerability by combining four
+key indicators (LST, NDVI, TCI, Population) weighted by their contribution to 
+variance in Land Surface Temperature (LST). A post-hoc adjustment for government 
+housing (GHI) is applied to sectors with available data.
+
+FORMULA:
+  composite_score = base_score + ghi_adjustment
+  
+where:
+  base_score = Σ(w_i × normalized_variable_i)  for i = LST, NDVI, TCI, Population
+  ghi_adjustment = normalized_GHI × GHI_ADJ_WEIGHT  (only if GHI is available)
+
+SCALE:
+  0.0 = best performing (lowest vulnerability)
+  1.0 = worst performing (highest vulnerability)
+
+═════════════════════════════════════════════════════════════════════════════════
+
+2. STEP-BY-STEP CALCULATION
+
+STEP 1: NORMALIZATION (MinMaxScaler)
+─────────────────────────────────────────────────────────────────────────────
+Each variable is scaled to [0, 1] using the formula:
+
+  normalized_value = (x - min(x)) / (max(x) - min(x))
+
+Variables normalized:
+  • LST           (°C) — Land Surface Temperature
+  • NDVI          — Normalized Difference Vegetation Index
+  • TCI           — Thermal Comfort Index
+  • Population    — Population density (persons/km²)
+
+Data source: 60 residential sectors (all urban except excluded non-residential)
+Excluded from scoring: Sectors 17 (commercial), 30 (industrial), 32 (institutional)
+
+STEP 2: NDVI INVERSION
+─────────────────────────────────────────────────────────────────────────────
+NDVI is inverted because higher vegetation (higher NDVI) indicates BETTER 
+conditions (lower vulnerability):
+
+  normalized_NDVI = 1 - normalized_NDVI
+
+This ensures that high vegetation reduces the composite score.
+
+STEP 3: PCA-DERIVED WEIGHTS
+─────────────────────────────────────────────────────────────────────────────
+Principal Component Analysis (PCA) is performed on the four variables to derive
+weights based on their variance contributions. PC1 is used because it captures
+the maximum variance in the data.
+
+Methodology:
+  1. Standardize all four variables (zero mean, unit variance)
+  2. Compute PCA; extract PC1 loadings
+  3. Take absolute values of PC1 loadings
+  4. Normalize to sum to (1 - GHI_ADJ_WEIGHT) = 0.85
+
+Results:
+
+  PC1 variance explained: 60.4%
+  
+  Variable          Weight        Contribution
+  ───────────────────────────────────────────
+  LST                22.6%      22.6% of (1.0 - GHI)
+  NDVI               24.1%      24.1% of (1.0 - GHI)
+  TCI                19.0%      19.0% of (1.0 - GHI)
+  Population         19.3%      19.3% of (1.0 - GHI)
+
+  GHI (post-hoc)      15.0%    Fixed post-hoc adjustment
+  ───────────────────────────────────────────
+  TOTAL             100.0%
+
+INTERPRETATION:
+  • NDVI is the strongest driver of LST variance
+  • Weights reflect natural covariance structure in the data, NOT normative importance
+  • The constraint (sum to 0.85) reserves 15% for GHI adjustment
+
+STEP 4: BASE SCORE CALCULATION
+─────────────────────────────────────────────────────────────────────────────
+Base score is the weighted sum of normalized variables:
+
+  base_score = Σ(w_i × normalized_variable_i)
+
+Example for Sector 1:
+  If normalized values are: LST=36.190, 
+                            NDVI=0.538, 
+                            TCI=0.775,
+                            Population=3300.000
+  Then base_score = sum of (weight × normalized value) for each variable
+
+Range: 0.0 to ~0.85 (theoretical max if all variables at extremes)
+
+STEP 5: GHI POST-HOC ADJUSTMENT
+─────────────────────────────────────────────────────────────────────────────
+Government Housing Index (GHI) is added as a post-hoc adjustment for sectors
+with housing data (24 out of 60 sectors):
+
+For sectors WITH GHI data:
+  1. Normalize GHI values to [0, 1]: 
+       normalized_GHI = (GHI - min(GHI)) / (max(GHI) - min(GHI))
+     
+  2. Invert (higher GHI pushes LST up):
+       adjusted_GHI = 1 - normalized_GHI
+     
+  3. Weight by GHI_ADJ_WEIGHT:
+       ghi_adjustment = adjusted_GHI × 0.15
+
+For sectors WITHOUT GHI data:
+  ghi_adjustment = 0 (no contribution)
+  These sectors are identified with hatching (///) in charts
+
+STEP 6: FINAL COMPOSITE SCORE
+─────────────────────────────────────────────────────────────────────────────
+Final score combines base score and GHI adjustment:
+
+  composite_score = base_score + ghi_adjustment
+
+Range: 0.0 to ~1.0
+  • 0.0–0.3 = Low vulnerability (better performing sectors)
+  • 0.3–0.6 = Moderate vulnerability
+  • 0.6–1.0 = High vulnerability (worse performing sectors)
+
+═════════════════════════════════════════════════════════════════════════════════
+
+3. RANKING AND INTERPRETATION
+
+Sectors are ranked by composite_score from lowest (best, rank=1) to highest 
+(worst, rank=60):
+
+Top 5 (Best Performing):
+  # 1  Sector 6      Score=0.0306  LST=36.2°C
+  # 2  Sector 25W    Score=0.2090  LST=38.7°C
+  # 3  Sector 5      Score=0.2377  LST=37.8°C
+  # 4  Sector 2      Score=0.2660  LST=39.0°C
+  # 5  Sector 4      Score=0.2792  LST=37.9°C
+
+Bottom 5 (Worst Performing):
+  #56  Sector 20     Score=0.6441  LST=40.1°C
+  #57  Sector 34     Score=0.6698  LST=40.9°C
+  #58  Sector 21     Score=0.6769  LST=40.1°C
+  #59  Sector 45     Score=0.7265  LST=41.1°C
+  #60  Sector Manimajra  Score=0.8406  LST=41.2°C
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+4. DATA EXCLUSIONS AND SPECIAL CASES
+
+EXCLUDED FROM SCORING (Non-residential):
+  • Sector 17 (Commercial zone)
+  • Sector 30 (Industrial zone)
+  • Sector 32 (Institutional zone)
+
+GEOGRAPHIC ISLANDS (Included but flagged):
+  • Manimajra: Included in scoring; excluded from spatial weights (no shared borders)
+  • Khuda Alisher: Included in scoring; excluded from spatial weights
+
+SECTORS WITH GHI ADJUSTMENT:
+  Total sectors with GHI data: 24
+  These sectors show /// hatching in the Composite Score Bar Chart
+
+═════════════════════════════════════════════════════════════════════════════════
+
+5. MATHEMATICAL FORMULAS (DETAILED)
+
+MinMaxScaler Normalization:
+  z_i = (x_i - min(x)) / (max(x) - min(x))  for each variable
+
+PC1 Loadings (from sklearn.decomposition.PCA):
+  loadings = |pca.components_[0]|  (absolute values)
+  normalized = loadings / loadings.sum() × (1 - GHI_ADJ_WEIGHT)
+
+Base Score:
+  S_base = w_LST × z_LST + w_NDVI × z_NDVI + w_TCI × z_TCI + w_Pop × z_Population
+  where z_NDVI = 1 - normalized_NDVI (inverted)
+
+GHI Adjustment (per sector):
+  If GHI is not NaN:
+    z_GHI = (GHI - min(GHI)) / (max(GHI) - min(GHI))
+    S_GHI = (1 - z_GHI) × GHI_ADJ_WEIGHT
+  Else:
+    S_GHI = 0
+
+Final Composite Score:
+  composite_score = S_base + S_GHI
+
+═════════════════════════════════════════════════════════════════════════════════
+
+6. BENCHMARK CONTEXT
+
+The Composite Vulnerability Score is used alongside UTFVI (Urban Thermal Field 
+Variance Index) to identify improvement priority sectors:
+
+BENCHMARK CRITERIA:
+  Criterion 1 (UTFVI Excellent): UTFVI < 0 (n = 30 sectors)
+  Criterion 2 (LISA LL cold spot): Spatial clustering (n = 0 sectors)
+
+Benchmark mean values:
+  LST:        39.127°C  (ecological standard for UHI exit)
+  NDVI:       0.4216
+  TCI:        1.3931
+  Population: 14488.6
+
+The Composite Score helps identify WHICH VARIABLES to target for improvement in
+vulnerable sectors. High composite scores + high LST = priority for intervention.
+
+═════════════════════════════════════════════════════════════════════════════════
+
+7. LIMITATIONS AND NOTES
+
+1. PCA WEIGHTS: The weights reflect variance structure, not normative importance.
+   A variable may have high weight simply because it has high natural variation,
+   not because it's "more important" for urban cooling.
+
+2. GHI LIMITATION: Only 24/57 numeric sectors have GHI data. The 15% post-hoc
+   weight is conservative to avoid overfitting to incomplete data.
+
+3. NON-LINEAR RELATIONSHIPS: MinMaxScaler assumes linear relationships. Complex
+   interactions (e.g., NDVI × Population) are not captured.
+
+4. TEMPORAL: Scores are based on a single point-in-time snapshot (current data).
+   Seasonal and inter-annual variation are not modeled.
+
+5. SCALE DEPENDENCY: Normalized values depend on the min/max in the full dataset.
+   If a new sector is added with extreme values, all scores shift slightly.
+
+═════════════════════════════════════════════════════════════════════════════════
+
+8. VALIDATION AND PERFORMANCE
+
+Leave-One-Out Cross-Validation (Random Forest prediction of LST):
+  The composite score's validity is corroborated by RF model performance:
+  - R² (LOO-CV) = [from RF model in Day 9]
+  - RMSE = [from RF model]
+  
+  The RF shows that the four variables (and their interactions) explain most
+  LST variance, validating the composite score as a proxy for thermal risk.
+
+═════════════════════════════════════════════════════════════════════════════════
+
+REFERENCES
+
+Liu, L. & Zhang, Y. (2011). Urban heat island analysis using the Landsat TM and
+  ASTER data: A case study in Hong Kong. Remote Sensing, 3(7), 1535–1552.
+
+Zhang, Y., Odeh, I. O., & Sun, L. (2006). Determining the relative importance
+  of land-use, physiography, and socioeconomic factors to urban heat island 
+  formation. Journal of Remote Sensing, 10(5), 789–803.
+
+Lundberg, S. M., & Lee, S. I. (2017). A unified approach to interpreting model
+  predictions. Advances in Neural Information Processing Systems, 30.
+
+sklearn Documentation: https://scikit-learn.org/stable/modules/preprocessing.html
+
+═════════════════════════════════════════════════════════════════════════════════
+
+Generated by: Sector_benchmark.py
+Author: Elias Ruiz Sabater
+Date: 2026-04-06
